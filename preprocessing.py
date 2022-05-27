@@ -1,79 +1,83 @@
 import logging
 
-# basic config must be done before loading other packages
-# logger.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s - %(message)s', datefmt='%d-%m-%Y %H:%M:%S')
 logger = logging.getLogger(__file__)
 logger.propagate = False
 logger.setLevel(logging.DEBUG)
+
 ch = logging.StreamHandler()
 ch.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s - %(message)s', datefmt='%d-%m-%Y %H:%M:%S')
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 
+fh = logging.FileHandler('preprocessing_log.txt', 'w')
+fh.setLevel(logging.DEBUG)
+fh.setFormatter(formatter)
+logger.addHandler(fh)
+
 import argparse
-from pathlib import Path
 import hyperspy.api as hs
 import pyxem as pxm
 from skimage.io import imsave
-from pyxem.signals import LazyDiffraction2D
 import numpy as np
-import matplotlib.pyplot as plt
-import pickle
-from tabulate import tabulate
-from skimage.feature import blob_dog, blob_log, blob_doh
+from skimage.feature import blob_log
 from pathlib import Path
-
-from scipy.ndimage import gaussian_filter
-from skimage.exposure import rescale_intensity
-from skimage.morphology import erosion
-from skimage.morphology import disk
-import skimage.filters as skifi
-
-
-def load_pickle(filename):
-    with open(filename, 'rb') as handle:
-        obj = pickle.load(handle)
-    return obj
-
-
-def subtract_background_dog(array, sigma_min, sigma_max):
-    """
-    Subtract the background of a 2D array using difference of gaussians (DOG)
-
-    :param array: The image
-    :param sigma_min: The lower sigma
-    :param sigma_max: The upper sigma
-    :return:
-    """
-    blur_max = gaussian_filter(array, sigma_max)
-    blur_min = gaussian_filter(array, sigma_min)
-    return np.maximum(np.where(blur_min > blur_max, array, 0) - blur_max, 0)
+from diffsims.utils.sim_utils import get_electron_wavelength
 
 
 def preprocess(filename, lazy=True, com_mask=(128, 128, 12), formats=None):
-    formats = formats if formats else ('.hspy', '.zarr')
+    """
+    Preprocess a 4D STEM data file
+
+    :param filename: The path to the data file
+    :param lazy: Whether to work lazily
+    :param com_mask: The region of the diffraction pattern to calculate COM within given in pixel coordinates (x, y, r)
+    :param formats: Output file formats. If None, both .hspy and .zarr will be created
+    :type filename: Union[str, Path]
+    :type lazy: bool
+    :type com_mask: Union[None, tuple]
+    :type formats: Union[None, tuple]
+    :return:
+    """
+    formats = formats if formats else ('.hspy', '.zspy')
     filename = Path(filename)
     logger.info(f'Loading data from {filename}')
+
+    # Load data
     signal = hs.load(filename, lazy=lazy)
     logger.debug(f'Loaded data')
     if not isinstance(signal, pxm.signals.ElectronDiffraction2D):
         logger.warning(
             f'Only ElectronDiffraction2D signals can be proeprocessed. I got {signal!r} of type {type(signal)}')
 
+    # Slice
+    # Restrict data to ROI
+    logger.info(f'Slicing the dataset')
+    signal = signal.inav[0:512, 0:512]
+    logger.debug(f'Sliced the dataset to navigation shape {signal.axes_manager.navigation_shape}')
+
     # Centering
+    # Center the dataset by estimating a linear shift from the centre of mass of the direct beam
     logger.info('Centering dataset')
     logger.debug(f'Calculating COM within {com_mask}')
+    # Calculate COM
     com = signal.center_of_mass(mask=com_mask)
+    # Create beam shift object
     beam_shift = pxm.signals.BeamShift(com.T)
+    # Create navigation mask for which pixels to use when calculating the beam shift
     mask = hs.signals.Signal2D(np.zeros(signal.axes_manager.navigation_shape, dtype=bool).T).T
+    # Set a 20 pixel wide frame to True. This will make the beam shift dependent on the "outer" regions of the scan while preserving a sufficient number for statistics
     mask.inav[20:-20, 20:-20] = True
     logger.debug(f'Estimating linear plane')
+    # Estimate the beam shifts
     beam_shift.make_linear_plane(mask=mask)
+    # We want to shift the patterns to the center
     beam_shift = beam_shift - (signal.axes_manager.signal_shape[0] // 2)
     logger.info(
-        f'Beam shifts are within {beam_shift.min(axis=[0, 1, 2, 3])} pixels and {beam_shift.max(axis=[0, 1, 2, 3])} pixels')
+        f'Beam shifts are within {float(beam_shift.min(axis=[0, 1, 2]).data)} pixels and {float(beam_shift.max(axis=[0, 1, 2]).data)} pixels')
+    # Shift the patterns
     signal.shift_diffraction(beam_shift.isig[0], beam_shift.isig[1], inplace=True)
+    # Add metadata
     signal.metadata.add_dictionary({
         'Preprocessing': {
             'Centering': {
@@ -90,33 +94,62 @@ def preprocess(filename, lazy=True, com_mask=(128, 128, 12), formats=None):
     })
 
     # Calibration
-    calibration = 0.009520  # Å^-1
+    # Calibration value from measuring distance between (-4, 0, 0) and (4, 0, 0) Al reflections
+    calibration = 0.00952  # Å^-1
     logger.info(f'Setting calibration to {calibration} Å^-1')
     signal.set_diffraction_calibration(calibration)
 
     # Binning
+    # Bin the signal dimension by a factor 2
     binning = (1, 1, 2, 2)
     logger.info(f'Binning signal with scales {binning}')
     signal = signal.rebin(scale=binning)
 
     # Preparing masks
+    # Prepare masks used for later data processing
     logger.info(f'Preparing masks')
     image = signal.mean(axis=[0, 1])
-    minimum_r = 5
+    minimum_r = 8  #
+
+    # Set up mask arrays
+    nx, ny = image.axes_manager.signal_shape
+    mask = np.zeros((nx, ny), dtype=bool)
+    direct_beam_mask = np.zeros((nx, ny), dtype=bool)
+    cutoff_mask = np.zeros((nx, ny), dtype=bool)
+
+    # Cuton / Cutoff
+    cutoff_hkl = np.array([2, 2, 0])  # Make a mask with cutoff at a given g-vector
+    cuton_mrad = 4  # Make a mask that cutsoff everything up a certain mrad
+    a = 4.04  # Lattice parameter of aluminium in Å
+    cutoff_g = np.sqrt(np.sum(cutoff_hkl ** 2 / a ** 2))
+    cuton_k = cuton_mrad / 1000 / get_electron_wavelength(image.metadata.Acquisition_instrument.TEM.beam_energy / 1000)
+    logger.info(
+        f'Minimum scattering vector: {cuton_k} {image.axes_manager[0].units}\nMaximum scattering vector: {cutoff_g} {image.axes_manager[0].units}')
+
+    X, Y = np.meshgrid(image.axes_manager[0].axis, image.axes_manager[1].axis)
+    # Set outer cutoff
+    R = np.sqrt(X ** 2 + Y ** 2)
+    cutoff_mask[R >= cutoff_g] = True
+    # Set inner cuton
+    R = np.sqrt(X ** 2 + Y ** 2)
+    direct_beam_mask[R <= cuton_k] = True
+
+    # Mask reflections
     blob_kwargs = {
         'min_sigma': 1,
         'max_sigma': 15,
         'num_sigma': 100,
         'overlap': 0,
-        'threshold': 1E-18,
+        'threshold': 5E0,
     }
+    # Print some info
     sep = "\n\t"
     logger.info(
         f'Searching for blobs using arguments:\n\t{f"{sep}".join([f"{key}: {blob_kwargs[key]}" for key in blob_kwargs])}')
+    # Look for blobs (reflections)
     blobs = blob_log(image.data, **blob_kwargs)
-    nx, ny = image.axes_manager.signal_shape
-    mask = np.zeros((nx, ny), dtype=bool)
-    direct_beam_mask = np.zeros((nx, ny), dtype=bool)
+    logger.info(f'Found {len(blobs)} blobs')
+    # Create masks
     xs, ys = np.arange(0, nx), np.arange(0, ny)
     X, Y = np.meshgrid(xs, ys)
     for blob in blobs:
@@ -125,35 +158,41 @@ def preprocess(filename, lazy=True, com_mask=(128, 128, 12), formats=None):
         r = max([minimum_r, r])  # Make sure that the radius is at least the specified minimum radius
         logger.info(f'Adding mask with radius {r} at ({x}, {y})')
         R = np.sqrt((X - x) ** 2 + (Y - y) ** 2)
+        mask[R < r] = True
 
-        # If the blob is within +/- 2 pixels of the center of the pattern, assign the blob to the direct beam mask
-        if nx // 2 - 2 <= x <= nx // 2 + 2 and ny // 2 - 2 <= y <= ny // 2 + 2:
-            logger.info(f'\tBlob assigned to direct beam mask')
-            direct_beam_mask[R <= r] = True
-        else:
-            logger.info(f'\tBlob assigned to reflection mask')
-            mask[R < r] = True
+    direct_beam_mask = hs.signals.Signal2D(direct_beam_mask)
+    direct_beam_mask.metadata.General.title = f'>{cuton_k} {signal.axes_manager[-1].units} mask'
 
+    cutoff_mask = hs.signals.Signal2D(cutoff_mask)
+    cutoff_mask.metadata.General.title = f'<{cutoff_g} {signal.axes_manager[-1].units} mask'
+
+    mask = hs.signals.Signal2D(mask)
+    mask.metadata.General.title = f'Reflection mask'
+    mask.metadata.add_dictionary({'Preprocessing': {'blob_log': blob_kwargs,
+                                                    'minimum_r': minimum_r}})
+
+    for m in [direct_beam_mask, mask, cutoff_mask]:
+        for ax in range(image.axes_manager.signal_dimension):
+            m.axes_manager[ax].scale = image.axes_manager[ax].scale
+            m.axes_manager[ax].units = image.axes_manager[ax].units
+
+    # Add metadata
     signal.metadata.add_dictionary({
         'Preprocessing': {
             'Masks': {
                 'Diffraction': {
                     'direct_beam': direct_beam_mask,
                     'reflections': mask,
+                    'cutoff': cutoff_mask
                 }
             }
         }
     })
 
-    # Normalize. This makes the data a float type. Remember to change dtype back to uint 16 if needed!
+    # Normalize.
+    # Normalize the data to (0, 1.0). This makes the data a float type. Remember to change dtype back to uint 16 if needed!
     logger.info('Normalizing data')
     signal = signal / signal.nanmax(axis=[0, 1, 2, 3])
-
-    # Rechunk to make sure chunking is reasonable
-    nav_chunks = 32
-    sig_chunks = 32
-    logger.info(f'Rechunking with {nav_chunks} navigation chunks and {sig_chunks} signal chunks in each dimension')
-    signal.rechunk(nav_chunks=nav_chunks, sig_chunks=sig_chunks)
 
     # Make VBF and maximum through-stack
     logger.info(f'Preparing VBF')
@@ -176,26 +215,25 @@ def preprocess(filename, lazy=True, com_mask=(128, 128, 12), formats=None):
         preprocessed_filename = filename.with_name(f'{filename.stem}_preprocessed{f}')
         logger.info(f'Saving preprocessed data to "{preprocessed_filename.absolute()}"')
         try:
-            signal.save(preprocessed_filename, chunks=(nav_chunks, nav_chunks, sig_chunks, sig_chunks), overwrite=True)
+            signal.save(preprocessed_filename, chunks=(32, 32, 32, 32), overwrite=True)
         except Exception as e:
-            logger.error(f'Exception when saving preprocessed signal with format {f}: \n{e}. \nSkipping format and continuing.')
-
+            logger.error(
+                f'Exception when saving preprocessed signal with format {f}: \n{e}. \nSkipping format and continuing.')
 
     # Save the VBF and maximums
     logger.info(f'Saving VBF and maximums as images')
     imsave(filename.with_name(f'{filename.stem}_preprocessed_vbf.png'), vbf.data)
     imsave(filename.with_name(f'{filename.stem}_preprocessed_maximums.png'), maximums.data)
-    imsave(filename.with_name(f'{filename.stem}_preprocessed_maximums_log10.png'), np.log10(maximums.data))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('filename', type=Path, help='Path to a 4D-STEM dataset to convert')
+    parser.add_argument('-l', '--lazy', dest='lazy', action='store_true', help='Work on the data lazily')
     parser.add_argument('-v', '--verbose', dest='verbosity', default=0, action='count', help='Set verbose level')
     arguments = parser.parse_args()
 
     log_level = [logging.WARNING, logging.INFO, logging.DEBUG][min([arguments.verbosity, 2])]
     logger.setLevel(log_level)
 
-    preprocess(arguments.filename, lazy=False, com_mask=(127, 126, 12.5), formats=('.hspy', '.zarr'))
-
+    preprocess(arguments.filename, lazy=arguments.lazy, com_mask=(127, 126, 12.5), formats=('.hspy', '.zspy'))
