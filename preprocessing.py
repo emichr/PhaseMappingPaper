@@ -39,7 +39,11 @@ def preprocess(filename, lazy=True, com_mask=(128, 128, 12), formats=None):
     :type formats: Union[None, tuple]
     :return:
     """
+    logger.debug(
+        f'Preprocessing function got the following arguments:\n\tfilename: {filename!r}\n\tlazy: {lazy!r}\n\tcom_mask: {com_mask!r}\n\tformats: {formats!r}')
     formats = formats if formats else ('.hspy', '.zspy')
+    logger.debug(f'I will save preprocessed signals in these formats: {formats}')
+
     filename = Path(filename)
     logger.info(f'Loading data from {filename}')
 
@@ -140,7 +144,7 @@ def preprocess(filename, lazy=True, com_mask=(128, 128, 12), formats=None):
         'max_sigma': 15,
         'num_sigma': 100,
         'overlap': 0,
-        'threshold': 5E0,
+        'threshold': 1.5E1,
     }
     # Print some info
     sep = "\n\t"
@@ -231,9 +235,11 @@ if __name__ == '__main__':
     parser.add_argument('filename', type=Path, help='Path to a 4D-STEM dataset to convert')
     parser.add_argument('-l', '--lazy', dest='lazy', action='store_true', help='Work on the data lazily')
     parser.add_argument('-v', '--verbose', dest='verbosity', default=0, action='count', help='Set verbose level')
+    parser.add_argument('-f', '--formats', dest='formats', type=list, default=['.hspy'], nargs='?',
+                        help='The dataformats to save the preprocessed data to')
     arguments = parser.parse_args()
 
     log_level = [logging.WARNING, logging.INFO, logging.DEBUG][min([arguments.verbosity, 2])]
     logger.setLevel(log_level)
 
-    preprocess(arguments.filename, lazy=arguments.lazy, com_mask=(127, 126, 12.5), formats=('.hspy', '.zspy'))
+    preprocess(arguments.filename, lazy=arguments.lazy, com_mask=(127, 126, 12.5), formats=arguments.formats)
