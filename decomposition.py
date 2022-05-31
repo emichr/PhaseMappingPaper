@@ -5,151 +5,263 @@ logger.propagate = False
 logger.setLevel(logging.DEBUG)
 ch = logging.StreamHandler()
 ch.setLevel(logging.DEBUG)
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s - %(message)s', datefmt='%d-%m-%Y %H:%M:%S')
+formatter = logging.Formatter(
+    "%(asctime)s - %(levelname)s - %(name)s - %(message)s", datefmt="%d-%m-%Y %H:%M:%S"
+)
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 
 import hyperspy.api as hs
 import pyxem as pxm
+import numpy as np
 import argparse
 import time
 
 from pathlib import Path
 
 
-def decompose(signal, normalize_poissonian_noise=False, algorithm='SVD', output_dimension=None, navmask=None,
-              diffmask=None):
+def decompose(
+    signal,
+    normalize_poissonian_noise=False,
+    algorithm="SVD",
+    output_dimension=None,
+    navmask=None,
+    diffmask=None,
+):
     if not isinstance(signal, hs.signals.Signal2D):
-        raise TypeError(f'Cannot perform decomposition on {signal!r}. It is not a 2D hyperspy signal')
+        raise TypeError(
+            f"Cannot perform decomposition on {signal!r}. It is not a 2D hyperspy signal"
+        )
 
     if navmask is not None:
-        logger.debug(f'Got navigation mask {navmask}')
+        logger.debug(f"Got navigation mask {navmask}")
         if isinstance(navmask, hs.signals.Signal2D):
-            logger.debug(f'Navigation mask is a hyperspy signal. Extracting data array')
+            logger.debug(f"Navigation mask is a hyperspy signal. Extracting data array")
             navmask = navmask.data
-            if not signal.axes_manager.navigtion_shape == navmask.shape:
-                logger.warning(
-                    f'The navigation mask shape {navmask.shape} does not match signal navigation shape {signal.axes_manager.navigation_shape}')
+        if not signal.axes_manager.navigtion_shape == navmask.shape:
+            logger.warning(
+                f"The navigation mask shape {navmask.shape} does not match signal navigation shape {signal.axes_manager.navigation_shape}"
+            )
 
     if diffmask is not None:
-        logger.debug(f'Got diffraction mask {diffmask}')
+        logger.debug(f"Got diffraction mask {diffmask}")
         if isinstance(diffmask, hs.signals.Signal2D):
-            logger.debug(f'Diffraction mask is a hyperspy signal. Extracting data array')
+            logger.debug(
+                f"Diffraction mask is a hyperspy signal. Extracting data array"
+            )
             diffmask = diffmask.data
-            if not signal.axes_manager.signal_shape == diffmask.shape:
-                logger.warning(
-                    f'The diffraction mask shape {navmask.shape} does not match signal diffraction shape {signal.axes_manager.signal_shape}')
+        if not signal.axes_manager.signal_shape == diffmask.shape:
+            logger.warning(
+                f"The diffraction mask shape {navmask.shape} does not match signal diffraction shape {signal.axes_manager.signal_shape}"
+            )
 
-    if isinstance(signal, pxm.signals.LazyDiffraction2D) and arguments.algorithm == 'NMF':
-        logger.warning(f'Signal {signal} is lazy but specified algorithm {arguments.algorithm} is not compatible with lazy signals.')
-        logger.warning(f'I will compute the signal to make it non-lazy and compatible with requested algorithm')
+    if (
+        isinstance(signal, pxm.signals.LazyDiffraction2D)
+        and arguments.algorithm == "NMF"
+    ):
+        logger.warning(
+            f"Signal {signal} is lazy but specified algorithm {arguments.algorithm} is not compatible with lazy signals."
+        )
+        logger.warning(
+            f"I will compute the signal to make it non-lazy and compatible with requested algorithm"
+        )
         signal.compute()
 
-    logger.info(f'Starting decomposition')
+    logger.info(f"Starting decomposition")
     tic = time.time()
-    signal.decomposition(normalize_poissonian_noise=normalize_poissonian_noise, algorithm=algorithm,
-                         output_dimension=output_dimension, navigation_mask=navmask, signal_mask=diffmask)
+    signal.decomposition(
+        normalize_poissonian_noise=normalize_poissonian_noise,
+        algorithm=algorithm,
+        output_dimension=output_dimension,
+        navigation_mask=navmask,
+        signal_mask=diffmask,
+    )
     toc = time.time()
-    logger.info(f'Finished decomposition. Elapsed time: {toc - tic} seconds')
+    logger.info(f"Finished decomposition. Elapsed time: {toc - tic} seconds")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Parser arguments
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('hs_file', type=Path, help='The HyperSpy .hdf5 file to decompose')
-    parser.add_argument('--poissonian', action='store_true',
-                        help=r'Whether to account for possionian noise or not. Default is False')
-    parser.add_argument('--components', default=None, type=int, help='Output components')
-    parser.add_argument('--algorithm', nargs='?', type=str, default='svd',
-                        choices=["SVD", "MLPCA", "sklearn_pca", "NMF", "sparse_pca", "mini_batch_sparse_pca", "RPCA",
-                                 "ORPCA", "ORNMF"], help='Decomposition algorithm')
-    parser.add_argument('--output_path', type=Path, default=None,
-                        help=r'The path to store output. Default is the same directory as the input file')
-    parser.add_argument('--diffmask', type=Path, default=None, help='Path to diffraction mask data')
-    parser.add_argument('--navmask', type=Path, default=None, help='Path to navigation mask data')
-    parser.add_argument('--lazy', action='store_true', help='Load lazy or not')
-    parser.add_argument('--save_new_signal', action='store_true',
-                        help='Save the signal with the decomposition results to a new file. This duplicates the raw data as well')
-    parser.add_argument('--save_learning_results', action='store_true', help='Save learning results in separate files')
-    parser.add_argument('-v', '--verbose', dest='verbosity', default=0, action='count', help='Set verbose level')
-    parser.add_argument('--overwrite', action='store_true',
-                        help='Whether to overwrite existing signals')
+    parser.add_argument(
+        "hs_file", type=Path, help="The HyperSpy .hdf5 file to decompose"
+    )
+    parser.add_argument(
+        "--mask",
+        action="store_true",
+        help="Whether to mask the data or not, using masks in the metadata. The masks should be True where data is to be removed/masked away.",
+    )
+    parser.add_argument(
+        "--apply_masks",
+        action="store_true",
+        help="Whether to apply diffraction masks to the data before decomposition instead of supplying them to the decomposition algorithm.",
+    )
+    parser.add_argument(
+        "--algorithm",
+        default="NMF",
+        choices=["SVD", "NMF"],
+        help="The decomposition algorithm to use",
+    )
+    parser.add_argument(
+        "--components", default=None, type=int, help="Output components"
+    )
+    parser.add_argument(
+        "--poissonian",
+        action="store_true",
+        help="Whether to assume poissonian noise when decomposing data or not",
+    )
+    parser.add_argument(
+        "--output_path",
+        type=Path,
+        default=None,
+        help=r"The path to store output. Default is the same directory as the input file",
+    )
+    parser.add_argument("--lazy", action="store_true", help="Load lazy or not")
+    parser.add_argument(
+        "--precision",
+        default="float32",
+        choices=["float32", "float64"],
+        help="The precision to use when performing NMF",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        dest="verbosity",
+        default=0,
+        action="count",
+        help="Set verbose level",
+    )
 
     arguments = parser.parse_args()
 
-    log_level = [logging.WARNING, logging.INFO, logging.DEBUG][min([arguments.verbosity, 2])]
+    log_level = [logging.WARNING, logging.INFO, logging.DEBUG][
+        min([arguments.verbosity, 2])
+    ]
     logger.setLevel(log_level)
 
-    args_as_str = [f'\n\t{arg!r} = {getattr(arguments, arg)}' for arg in vars(arguments)]
+    args_as_str = [
+        f"\n\t{arg!r} = {getattr(arguments, arg)}" for arg in vars(arguments)
+    ]
     logger.debug(f'Running decomposition script with arguments:{"".join(args_as_str)}')
 
     if arguments.output_path is None:
         output_path = arguments.hs_file.parent
-        logger.info(f'No output directory specified, I will put outputs at "{output_path.absolute()}"')
+        logger.info(
+            f'No output directory specified, I will put outputs at "{output_path.absolute()}"'
+        )
     else:
         output_path = arguments.output_path
         if not output_path.exists():
             logger.info(
-                f'Specified output path "{output_path.absolute()}" does not exists. I will attempt to create it')
+                f'Specified output path "{output_path.absolute()}" does not exists. I will attempt to create it'
+            )
             if not output_path.is_dir():
-                raise ValueError(f'Output path "{output_path.absolute()} is not a directory and cannot be created.')
+                raise ValueError(
+                    f'Output path "{output_path.absolute()} is not a directory and cannot be created.'
+                )
             else:
                 logger.info(f'Creating output directory "{output_path.absolute()}"')
                 output_path.mkdir(parents=True, exist_ok=True)
-                logger.info(f'Created output directory successfully.')
+                logger.info(f"Created output directory successfully.")
         logger.info(f'I will put outputs at "{output_path.absolute()}"')
 
-    if arguments.diffmask is not None:
-        logger.info(f'Loading diffraction mask signal "{arguments.diffmask.absolute()}')
-        diffmask = hs.load(arguments.diffmask.absolute())
-    else:
-        diffmask = None
-
-    if arguments.navmask is not None:
-        logger.info(f'Loading navigation mask signal "{arguments.navmask.absolute()}')
-        navmask = hs.load(arguments.navmask.absolute())
-    else:
-        navmask = None
-
-    suffix = ''
+    suffix = ""
     if arguments.poissonian:
-        suffix += '_poissonian'
-    if diffmask is not None:
-        suffix += '_diffmask'
-    if navmask is not None:
-        suffix += '_navmask'
-    output_name = output_path / f'{arguments.hs_file.stem}_{arguments.algorithm}_{arguments.components}{suffix}{arguments.hs_file.suffix}'
+        suffix += "_poissonian"
+    if arguments.mask is not None:
+        suffix += "_mask"
+    output_name = (
+        output_path
+        / f"{arguments.hs_file.stem}_{arguments.algorithm}_{arguments.components}{suffix}{arguments.hs_file.suffix}"
+    )
     logger.info(f'I will output data to "{output_name.absolute()}"')
-
-    if not arguments.overwrite:
-        logger.warning(f'I will not overwrite existing files.')
 
     logger.info(f'Loading data signal "{arguments.hs_file.absolute()}')
     signal = hs.load(arguments.hs_file.absolute(), lazy=arguments.lazy)
 
-    if not signal.data.dtype == 'float32':
-        logger.info(f'Changing datatype from {signal.data.dtype} to float32')
-        signal.change_dtype('float32')
+    if arguments.mask:
+        # Extract diffraction mask
+        logger.info(
+            f"Getting diffraction mask signals"
+        )
+        try:
+            masks = [
+                mask[1] for mask in signal.metadata.Preprocessing.Masks.Diffraction
+            ]  # Extract the diffraction masks from the metadata
+        except AttributeError as e:
+            logger.error(f"No Diffraction mask detected:\n{e}")
+            diffmask = None
+        else:
+            print(f"Found {len(masks)} diffraction masks in the metadata")
+            diffmask = np.zeros(
+                signal.axes_manager.signal_shape, dtype=bool
+            )  # Create mask
+            for mask in masks:  # Iterate and add masks together
+                logger.info(f"Adding mask {mask} to diffraction mask")
+                diffmask += mask
 
-    decompose(signal, normalize_poissonian_noise=arguments.poissonian, algorithm=arguments.algorithm,
-              output_dimension=arguments.components, navmask=navmask, diffmask=diffmask)
+        logger.info(f"Getting navigation mask signals")
+        try:
+            masks = [
+                mask[1] for mask in signal.metadata.Preprocessing.Masks.Navigation
+            ]  # Extract the navigation masks from the metadata
+        except AttributeError as e:
+            logger.error(f"No Navigation mask detected:\n{e}")
+            navmask = None
+        else:
+            print(f"Found {len(masks)} navigation masks in the metadata")
+            navmask = np.zeros(
+                signal.axes_manager.navigation_shape, dtype=bool
+            )  # Create mask
+            for mask in masks:  # Iterate and add masks together
+                logger.info(f"Adding mask {mask} to navigation mask")
+                navmask += mask
 
-    #File saving
-    if arguments.save_new_signal:
-        logger.info(f'Saving decomposed signal to "{output_name}"')
-        signal.save(output_name.absolute(), overwrite=arguments.overwrite)
+        if arguments.apply_mask:
+            logger.info(f"Applying diffraction masks to the signal")
+            signal = signal * ~diffmask  # apply the diffraction mask to the signal
+            diffmask = None  # Set the diffraction mask to None as the signal is already masked now.
     else:
-        if arguments.overwrite:
-            logger.info(f'Overwriting datafile with decomposed signal (saving to "{arguments.hs_file.absolute()}")')
-            signal.save(arguments.hs_file.absolute(), overwrite=arguments.overwrite)
+        diffmask = None
+        navmask = None
 
-    if arguments.save_learning_results:
-        logger.info(f'Saving learning results to "{output_name}" (with _loadings and _factors name identifiers)')
+    # Check type and convert to float if needed
+    if signal.data.dtype != arguments.precision:
+        logger.info(
+            f"Changing datatype from {signal.data.dtype} to {arguments.precision}"
+        )
+        signal.change_dtype(arguments.precision)
 
-        loadings = signal.get_decomposition_loadings()
-        factors = signal.get_decomposition_factors()
+    decompose(
+        signal,
+        normalize_poissonian_noise=arguments.poissonian,
+        algorithm=arguments.algorithm,
+        output_dimension=arguments.components,
+        navmask=navmask,
+        diffmask=diffmask,
+    )
 
-        loadings.save(output_name.with_name(f'{output_name.stem}_loadings{output_name.suffix}'), overwrite=arguments.overwrite)
-        factors.save(output_name.with_name(f'{output_name.stem}_factors{output_name.suffix}'), overwrite=arguments.overwrite)
+    # File saving
+    logger.info(
+        f'Saving learning results to "{output_name}" (with _loadings and _factors name identifiers)'
+    )
 
-    logger.info(f'Finished decomposition script')
+    try:
+        logger.info(f"Saving factors")
+        factors = signal.get_decomposition_factors().save(
+            output_name.with_name(f"{output_name.stem}_factors{output_name.suffix}"),
+            overwrite=True,
+        )
+    except Exception as e:
+        logger.error(f"Could not save decomposition factors:\n{e}")
+
+    try:
+        logger.info(f"Saving loadings")
+        loadings = signal.get_decomposition_loadings().save(
+            output_name.with_name(f"{output_name.stem}_loadings{output_name.suffix}"),
+            overwrite=True,
+        )
+    except Exception as e:
+        logger.error("Could not save decomposition loadings: \n{e}")
+
+    logger.info(f"Finished decomposition script")
