@@ -92,9 +92,9 @@ if __name__ == "__main__":
         help="Whether to mask the data or not, using masks in the metadata. The masks should be True where data is to be removed/masked away.",
     )
     parser.add_argument(
-        "--apply_masks",
+        "--apply_mask",
         action="store_true",
-        help="Whether to apply diffraction masks to the data before decomposition instead of supplying them to the decomposition algorithm.",
+        help="Whether to apply diffraction mask to the data before decomposition instead of supplying them to the decomposition algorithm.",
     )
     parser.add_argument(
         "--algorithm",
