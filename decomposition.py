@@ -192,7 +192,7 @@ if __name__ == "__main__":
             logger.error(f"No Diffraction mask detected:\n{e}")
             diffmask = None
         else:
-            print(f"Found {len(masks)} diffraction masks in the metadata")
+            logger.info(f"Found {len(masks)} diffraction masks in the metadata")
             diffmask = np.zeros(
                 signal.axes_manager.signal_shape, dtype=bool
             )  # Create mask
@@ -209,7 +209,7 @@ if __name__ == "__main__":
             logger.error(f"No Navigation mask detected:\n{e}")
             navmask = None
         else:
-            print(f"Found {len(masks)} navigation masks in the metadata")
+            logger.info(f"Found {len(masks)} navigation masks in the metadata")
             navmask = np.zeros(
                 signal.axes_manager.navigation_shape, dtype=bool
             )  # Create mask
