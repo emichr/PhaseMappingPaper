@@ -87,6 +87,16 @@ if __name__ == "__main__":
         "hs_file", type=Path, help="The HyperSpy .hdf5 file to decompose"
     )
     parser.add_argument(
+        "--logscale",
+        action="store_true",
+        help="Whether to apply a log10 scale to the data or not"
+    )
+    parser.add_argument(
+        "--log_offset",
+        type=float,
+        help="Value to add to the data before logscaling it, and subsequently subtract the logarithm of this value from the logscaled data"
+    )
+    parser.add_argument(
         "--mask",
         action="store_true",
         help="Whether to mask the data or not, using masks in the metadata. The masks should be True where data is to be removed/masked away.",
@@ -170,14 +180,27 @@ if __name__ == "__main__":
         suffix += "_poissonian"
     if arguments.mask is not None:
         suffix += "_mask"
+    if arguments.logscale:
+        suffix += "_log"
+        if arguments.log_offset is not None:
+            suffix += f"_logoffset{arguments.log_offset}"
     output_name = (
-        output_path
-        / f"{arguments.hs_file.stem}_{arguments.algorithm}_{arguments.components}{suffix}{arguments.hs_file.suffix}"
+            output_path
+            / f"{arguments.hs_file.stem}_{arguments.algorithm}_{arguments.components}{suffix}{arguments.hs_file.suffix}"
     )
     logger.info(f'I will output data to "{output_name.absolute()}"')
 
     logger.info(f'Loading data signal "{arguments.hs_file.absolute()}')
     signal = hs.load(arguments.hs_file.absolute(), lazy=arguments.lazy)
+
+    if arguments.logscale:
+        logger.info(f"Logscaling the data (base 10)")
+        if arguments.log_offset is None:
+            logger.info(f"Using no log offset")
+            signal = np.log10(signal)
+        else:
+            logger.info(f"Using log offset {arguments.log_offset}")
+            signal = np.log10(signal + arguments.log_offset) - np.log10(arguments.log_offset)
 
     if arguments.mask:
         # Extract diffraction mask
