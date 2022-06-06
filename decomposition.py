@@ -126,6 +126,11 @@ if __name__ == "__main__":
         default=None,
         help=r"The path to store output. Default is the same directory as the input file",
     )
+    parser.add_argument(
+        "--store_signal",
+        action="store_true",
+        help="Whether to also store the decomposed signal with decomposition results or not. The factors and loadings will not be stored separately."
+    )
     parser.add_argument("--lazy", action="store_true", help="Load lazy or not")
     parser.add_argument(
         "--precision",
@@ -265,26 +270,31 @@ if __name__ == "__main__":
     )
 
     # File saving
-    logger.info(
-        f'Saving learning results to "{output_name}" (with _loadings and _factors name identifiers)'
-    )
 
-    try:
-        logger.info(f"Saving factors")
-        factors = signal.get_decomposition_factors().save(
-            output_name.with_name(f"{output_name.stem}_factors{output_name.suffix}"),
-            overwrite=True,
+    if arguments.store_signal:
+        logger.info(f'Saving dataset with decomposition results to "{output_name}"')
+        signal.save(output_name, overwrite=True)
+    else:
+        logger.info(
+            f'Saving learning results to "{output_name}" (with _loadings and _factors name identifiers)'
         )
-    except Exception as e:
-        logger.error(f"Could not save decomposition factors:\n{e}")
 
-    try:
-        logger.info(f"Saving loadings")
-        loadings = signal.get_decomposition_loadings().save(
-            output_name.with_name(f"{output_name.stem}_loadings{output_name.suffix}"),
-            overwrite=True,
-        )
-    except Exception as e:
-        logger.error("Could not save decomposition loadings: \n{e}")
+        try:
+            logger.info(f"Saving factors")
+            factors = signal.get_decomposition_factors().save(
+                output_name.with_name(f"{output_name.stem}_factors{output_name.suffix}"),
+                overwrite=True,
+            )
+        except Exception as e:
+            logger.error(f"Could not save decomposition factors:\n{e}")
+
+        try:
+            logger.info(f"Saving loadings")
+            loadings = signal.get_decomposition_loadings().save(
+                output_name.with_name(f"{output_name.stem}_loadings{output_name.suffix}"),
+                overwrite=True,
+            )
+        except Exception as e:
+            logger.error("Could not save decomposition loadings: \n{e}")
 
     logger.info(f"Finished decomposition script")
