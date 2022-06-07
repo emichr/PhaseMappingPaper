@@ -206,7 +206,8 @@ if __name__ == "__main__":
         else:
             logger.info(f"Using log offset {arguments.log_offset}")
             log_offset = np.array(arguments.log_offset, dtype=arguments.precision)
-            signal = np.log10(signal + log_offset) - np.log10(log_offset)
+            signal = np.log10(signal + log_offset, dtype=arguments.precision) - np.log10(log_offset,
+                                                                                         dtype=arguments.precision)
 
     if arguments.mask:
         # Extract diffraction mask
