@@ -118,7 +118,7 @@ if __name__ == "__main__":
         help="The decomposition algorithm to use",
     )
     parser.add_argument(
-        "--components", default=None, type=int, nargs='?',
+        "--components", default=None, type=int, nargs='+',
         help="Output components. Can be a series of components to decompose dataset into."
     )
     parser.add_argument(
@@ -266,6 +266,7 @@ if __name__ == "__main__":
     # Cutoff signal
     if arguments.cutoff is not None:
         cutoff = abs(arguments.cutoff)
+        logger.info(f"Cutting signal off at {cutoff} {signal.axes_manager[-1].units}")
         signal = signal.isig[-cutoff:cutoff + signal.axes_manager[-2].scale,
                  -cutoff:cutoff + signal.axes_manager[-1].scale]
 
