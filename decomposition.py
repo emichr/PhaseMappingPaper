@@ -107,13 +107,19 @@ if __name__ == "__main__":
         help="Whether to apply diffraction mask to the data before decomposition instead of supplying them to the decomposition algorithm.",
     )
     parser.add_argument(
+        "--cutoff",
+        type=float,
+        help="Diffraction pattern cutoff in Å^-1"
+    )
+    parser.add_argument(
         "--algorithm",
         default="NMF",
         choices=["SVD", "NMF"],
         help="The decomposition algorithm to use",
     )
     parser.add_argument(
-        "--components", default=None, type=int, help="Output components"
+        "--components", default=None, type=int, nargs='?',
+        help="Output components. Can be a series of components to decompose dataset into."
     )
     parser.add_argument(
         "--poissonian",
@@ -180,6 +186,7 @@ if __name__ == "__main__":
                 logger.info(f"Created output directory successfully.")
         logger.info(f'I will put outputs at "{output_path.absolute()}"')
 
+    # Suffix to add to output name
     suffix = ""
     if arguments.poissonian:
         suffix += "_poissonian"
@@ -189,14 +196,16 @@ if __name__ == "__main__":
         suffix += "_log"
         if arguments.log_offset is not None:
             suffix += f"_logoffset{arguments.log_offset}"
-    output_name = (
-            output_path
-            / f"{arguments.hs_file.stem}_{arguments.algorithm}_{arguments.components}{suffix}{arguments.hs_file.suffix}"
-    )
-    logger.info(f'I will output data to "{output_name.absolute()}"')
 
     logger.info(f'Loading data signal "{arguments.hs_file.absolute()}')
     signal = hs.load(arguments.hs_file.absolute(), lazy=arguments.lazy)
+
+    # Check type and convert to float if needed
+    if signal.data.dtype != arguments.precision:
+        logger.info(
+            f"Changing datatype from {signal.data.dtype} to {arguments.precision}"
+        )
+        signal.change_dtype(arguments.precision)
 
     if arguments.logscale:
         logger.info(f"Logscaling the data (base 10)")
@@ -205,9 +214,8 @@ if __name__ == "__main__":
             signal = np.log10(signal)
         else:
             logger.info(f"Using log offset {arguments.log_offset}")
-            log_offset = np.array(arguments.log_offset, dtype=arguments.precision)
-            signal = np.log10(signal + log_offset, dtype=arguments.precision) - np.log10(log_offset,
-                                                                                         dtype=arguments.precision)
+            signal = np.log10(signal + arguments.log_offset, dtype=arguments.precision) - np.log10(arguments.log_offset,
+                                                                                                   dtype=arguments.precision)
 
     if arguments.mask:
         # Extract diffraction mask
@@ -255,48 +263,66 @@ if __name__ == "__main__":
         diffmask = None
         navmask = None
 
-    # Check type and convert to float if needed
+    # Cutoff signal
+    if arguments.cutoff is not None:
+        cutoff = abs(arguments.cutoff)
+        signal = signal.isig[-cutoff:cutoff + signal.axes_manager[-2].scale,
+                 -cutoff:cutoff + signal.axes_manager[-1].scale]
+
+    # Recheck type and convert if needed
     if signal.data.dtype != arguments.precision:
         logger.info(
             f"Changing datatype from {signal.data.dtype} to {arguments.precision}"
         )
         signal.change_dtype(arguments.precision)
 
-    decompose(
-        signal,
-        normalize_poissonian_noise=arguments.poissonian,
-        algorithm=arguments.algorithm,
-        output_dimension=arguments.components,
-        navmask=navmask,
-        diffmask=diffmask,
-    )
-
-    # File saving
-
-    if arguments.store_signal:
-        logger.info(f'Saving dataset with decomposition results to "{output_name}"')
-        signal.save(output_name, overwrite=True)
+    if arguments.components is None:
+        components = [None]
     else:
-        logger.info(
-            f'Saving learning results to "{output_name}" (with _loadings and _factors name identifiers)'
+        components = arguments.components
+
+    for component in components:
+        decompose(
+            signal,
+            normalize_poissonian_noise=arguments.poissonian,
+            algorithm=arguments.algorithm,
+            output_dimension=component,
+            navmask=navmask,
+            diffmask=diffmask,
         )
 
-        try:
-            logger.info(f"Saving factors")
-            factors = signal.get_decomposition_factors().save(
-                output_name.with_name(f"{output_name.stem}_factors{output_name.suffix}"),
-                overwrite=True,
-            )
-        except Exception as e:
-            logger.error(f"Could not save decomposition factors:\n{e}")
+        # File saving
 
-        try:
-            logger.info(f"Saving loadings")
-            loadings = signal.get_decomposition_loadings().save(
-                output_name.with_name(f"{output_name.stem}_loadings{output_name.suffix}"),
-                overwrite=True,
+        output_name = (
+                output_path
+                / f"{arguments.hs_file.stem}_{arguments.algorithm}_{component}{suffix}{arguments.hs_file.suffix}"
+        )
+        logger.info(f'I will output data to "{output_name.absolute()}"')
+
+        if arguments.store_signal:
+            logger.info(f'Saving dataset with decomposition results to "{output_name}"')
+            signal.save(output_name, overwrite=True)
+        else:
+            logger.info(
+                f'Saving learning results to "{output_name}" (with _loadings and _factors name identifiers)'
             )
-        except Exception as e:
-            logger.error("Could not save decomposition loadings: \n{e}")
+
+            try:
+                logger.info(f"Saving factors")
+                factors = signal.get_decomposition_factors().save(
+                    output_name.with_name(f"{output_name.stem}_factors{output_name.suffix}"),
+                    overwrite=True,
+                )
+            except Exception as e:
+                logger.error(f"Could not save decomposition factors:\n{e}")
+
+            try:
+                logger.info(f"Saving loadings")
+                loadings = signal.get_decomposition_loadings().save(
+                    output_name.with_name(f"{output_name.stem}_loadings{output_name.suffix}"),
+                    overwrite=True,
+                )
+            except Exception as e:
+                logger.error("Could not save decomposition loadings: \n{e}")
 
     logger.info(f"Finished decomposition script")
