@@ -180,6 +180,14 @@ if __name__ == "__main__":
     ]
     logger.debug(f'Running decomposition script with arguments:{"".join(args_as_str)}')
 
+    if arguments.algorithm == "NMF":
+        kwargs = {
+            'max_iter': arguments.max_iter,
+            'init': arguments.initialization
+        }
+    else:
+        kwargs = {}
+
     if arguments.output_path is None:
         output_path = arguments.hs_file.parent
         logger.info(
@@ -211,6 +219,8 @@ if __name__ == "__main__":
         suffix += "_log"
         if arguments.log_offset is not None:
             suffix += f"_logoffset{arguments.log_offset}"
+    for arg in kwargs:
+        suffix += f"_{arg}-{kwargs[arg]}"
 
     logger.info(f'Loading data signal "{arguments.hs_file.absolute()}')
     signal = hs.load(arguments.hs_file.absolute(), lazy=arguments.lazy)
@@ -296,14 +306,6 @@ if __name__ == "__main__":
         components = [None]
     else:
         components = arguments.components
-
-    if arguments.algorithm == "NMF":
-        kwargs = {
-            'max_iter': arguments.max_iter,
-            'init': arguments.initialization
-        }
-    else:
-        kwargs = {}
 
     for component in components:
         decompose(
