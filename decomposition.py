@@ -27,6 +27,7 @@ def decompose(
     output_dimension=None,
     navmask=None,
     diffmask=None,
+    **kwargs
 ):
     if not isinstance(signal, hs.signals.Signal2D):
         raise TypeError(
@@ -67,7 +68,7 @@ def decompose(
         )
         signal.compute()
 
-    logger.info(f"Starting decomposition")
+    logger.info(f"Starting decomposition with keyword arguments {kwargs}")
     tic = time.time()
     signal.decomposition(
         normalize_poissonian_noise=normalize_poissonian_noise,
@@ -75,6 +76,7 @@ def decompose(
         output_dimension=output_dimension,
         navigation_mask=navmask,
         signal_mask=diffmask,
+        **kwargs,
     )
     toc = time.time()
     logger.info(f"Finished decomposition. Elapsed time: {toc - tic} seconds")
@@ -125,6 +127,19 @@ if __name__ == "__main__":
         "--poissonian",
         action="store_true",
         help="Whether to assume poissonian noise when decomposing data or not",
+    )
+    parser.add_argument(
+        "--max_iter",
+        default=200,
+        type=int,
+        help='The number of maximum iterations used during NMF'
+    )
+    parser.add_argument(
+        "--initialization",
+        default=None,
+        type=str,
+        choices=[None, "random", "nndsvd", "nndsvda", "nndsvdar"],
+        help="The initialization used for NMF"
     )
     parser.add_argument(
         "--output_path",
@@ -282,6 +297,14 @@ if __name__ == "__main__":
     else:
         components = arguments.components
 
+    if arguments.algorithm == "NMF":
+        kwargs = {
+            'max_iter': arguments.max_iter,
+            'init': arguments.initialization
+        }
+    else:
+        kwargs = {}
+
     for component in components:
         decompose(
             signal,
@@ -290,6 +313,7 @@ if __name__ == "__main__":
             output_dimension=component,
             navmask=navmask,
             diffmask=diffmask,
+            **kwargs
         )
 
         # File saving
