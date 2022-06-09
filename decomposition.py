@@ -89,6 +89,12 @@ if __name__ == "__main__":
         "hs_file", type=Path, help="The HyperSpy .hdf5 file to decompose"
     )
     parser.add_argument(
+        "--scale",
+        type=float,
+        default=None,
+        help="Value to scale the diffraction patters with"
+    )
+    parser.add_argument(
         "--logscale",
         action="store_true",
         help="Whether to apply a log10 scale to the data or not"
@@ -211,6 +217,8 @@ if __name__ == "__main__":
 
     # Suffix to add to output name
     suffix = ""
+    if arguments.scale is not None:
+        suffix += f"_scaled-{arguments.scale}"
     if arguments.poissonian:
         suffix += "_poissonian"
     if arguments.mask is not None:
@@ -224,6 +232,10 @@ if __name__ == "__main__":
 
     logger.info(f'Loading data signal "{arguments.hs_file.absolute()}')
     signal = hs.load(arguments.hs_file.absolute(), lazy=arguments.lazy)
+
+    if arguments.scale is not None:
+        logger.info(f"Scaling signal by multiplying it with {arguments.scale}")
+        signal = signal * arguments.scale
 
     # Check type and convert to float if needed
     if signal.data.dtype != arguments.precision:
