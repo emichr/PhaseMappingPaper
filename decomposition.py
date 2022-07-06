@@ -207,7 +207,6 @@ if __name__ == "__main__":
 
     kwargs = {
         'random_state': arguments.random_state,
-        'return_info': True,
         'copy': arguments.copy,
     }
 
