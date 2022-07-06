@@ -21,13 +21,13 @@ from pathlib import Path
 
 
 def decompose(
-    signal,
-    normalize_poissonian_noise=False,
-    algorithm="SVD",
-    output_dimension=None,
-    navmask=None,
-    diffmask=None,
-    **kwargs
+        signal,
+        normalize_poissonian_noise=False,
+        algorithm="SVD",
+        output_dimension=None,
+        navmask=None,
+        diffmask=None,
+        **kwargs
 ):
     if not isinstance(signal, hs.signals.Signal2D):
         raise TypeError(
@@ -57,8 +57,8 @@ def decompose(
             )
 
     if (
-        isinstance(signal, pxm.signals.LazyDiffraction2D)
-        and arguments.algorithm == "NMF"
+            isinstance(signal, pxm.signals.LazyDiffraction2D)
+            and arguments.algorithm == "NMF"
     ):
         logger.warning(
             f"Signal {signal} is lazy but specified algorithm {arguments.algorithm} is not compatible with lazy signals."
@@ -86,6 +86,8 @@ def decompose(
     if algorithm == 'NMF':
         logger.info(f"Decomposition reconstruction error: {decomp.reconstruction_err_}")
         logger.info(f"Decomposition number of iterations: {decomp.n_iter_}")
+
+    return decomp
 
 
 if __name__ == "__main__":
@@ -154,6 +156,17 @@ if __name__ == "__main__":
         help="The initialization used for NMF"
     )
     parser.add_argument(
+        "--random_state",
+        default=None,
+        type=int,
+        help="The random state used when --initialization is random"
+    )
+    parser.add_argument(
+        "--copy",
+        action='store_true',
+        help="Whether to copy the data during decomposition or not. NB! This will change the data in the signal and should NOT be used together with --store_signal!"
+    )
+    parser.add_argument(
         "--output_path",
         type=Path,
         default=None,
@@ -192,13 +205,19 @@ if __name__ == "__main__":
     ]
     logger.debug(f'Running decomposition script with arguments:{"".join(args_as_str)}')
 
+    kwargs = {
+        'random_state': arguments.random_state,
+        'return_info': True,
+        'copy': arguments.copy,
+    }
+
     if arguments.algorithm == "NMF":
-        kwargs = {
-            'max_iter': arguments.max_iter,
-            'init': arguments.initialization
-        }
-    else:
-        kwargs = {}
+        kwargs.update(
+            {
+                'max_iter': arguments.max_iter,
+                'init': arguments.initialization
+            }
+        )
 
     if arguments.output_path is None:
         output_path = arguments.hs_file.parent
@@ -326,7 +345,7 @@ if __name__ == "__main__":
         components = arguments.components
 
     for component in components:
-        decompose(
+        decomp = decompose(
             signal,
             normalize_poissonian_noise=arguments.poissonian,
             algorithm=arguments.algorithm,
@@ -346,6 +365,7 @@ if __name__ == "__main__":
 
         if arguments.store_signal:
             logger.info(f'Saving dataset with decomposition results to "{output_name}"')
+            signal.metadata.add_dictionary({'Decomposition': decomp})
             signal.save(output_name, overwrite=True)
         else:
             logger.info(
@@ -354,7 +374,9 @@ if __name__ == "__main__":
 
             try:
                 logger.info(f"Saving factors")
-                factors = signal.get_decomposition_factors().save(
+                factors = signal.get_decomposition_factors()
+                factors.metadata.add_dictionary({'Decomposition': decomp})
+                factors.save(
                     output_name.with_name(f"{output_name.stem}_factors{output_name.suffix}"),
                     overwrite=True,
                 )
@@ -363,7 +385,9 @@ if __name__ == "__main__":
 
             try:
                 logger.info(f"Saving loadings")
-                loadings = signal.get_decomposition_loadings().save(
+                loadings = signal.get_decomposition_loadings()
+                loadings.metadata.add_dictionary({'Decomposition': decomp})
+                loadings.save(
                     output_name.with_name(f"{output_name.stem}_loadings{output_name.suffix}"),
                     overwrite=True,
                 )
