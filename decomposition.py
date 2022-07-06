@@ -70,16 +70,22 @@ def decompose(
 
     logger.info(f"Starting decomposition with keyword arguments {kwargs}")
     tic = time.time()
-    signal.decomposition(
+    decomp = signal.decomposition(
         normalize_poissonian_noise=normalize_poissonian_noise,
         algorithm=algorithm,
         output_dimension=output_dimension,
         navigation_mask=navmask,
         signal_mask=diffmask,
+        return_info=True,
         **kwargs,
     )
     toc = time.time()
     logger.info(f"Finished decomposition. Elapsed time: {toc - tic} seconds")
+    logger.info(f"Decoposition parameters:\n{decomp}")
+
+    if algorithm == 'NMF':
+        logger.info(f"Decomposition reconstruction error: {decomp.reconstruction_err_}")
+        logger.info(f"Decomposition number of iterations: {decomp.n_iter_}")
 
 
 if __name__ == "__main__":
