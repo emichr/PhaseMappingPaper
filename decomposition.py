@@ -118,6 +118,11 @@ if __name__ == "__main__":
         help="Whether to mask the data or not, using masks in the metadata. The masks should be True where data is to be removed/masked away.",
     )
     parser.add_argument(
+        "--navmask",
+        action="append",
+        help="Append a navigation mask to use for masking the decomposition in real space. Specify multiple times to add more masks, or specify a single time with 'all' to select all navigation masks in the metadata field."
+    )
+    parser.add_argument(
         "--apply_mask",
         action="store_true",
         help="Whether to apply diffraction mask to the data before decomposition instead of supplying them to the decomposition algorithm.",
@@ -299,22 +304,34 @@ if __name__ == "__main__":
                 logger.info(f"Adding mask {mask} to diffraction mask")
                 diffmask += mask
 
+        # Extract navigation mask signals
         logger.info(f"Getting navigation mask signals")
+        navmasks = arguments.navmask
         try:
-            masks = [
-                mask[1] for mask in signal.metadata.Preprocessing.Masks.Navigation
-            ]  # Extract the navigation masks from the metadata
+            masks = signal.metadata.Preprocessing.Masks.Navigation  # Extract the navigation masks from the metadata
         except AttributeError as e:
             logger.error(f"No Navigation mask detected:\n{e}")
             navmask = None
         else:
             logger.info(f"Found {len(masks)} navigation masks in the metadata")
-            navmask = np.zeros(
-                signal.axes_manager.navigation_shape, dtype=bool
-            )  # Create mask
-            for mask in masks:  # Iterate and add masks together
-                logger.info(f"Adding mask {mask} to navigation mask")
-                navmask += mask
+            if len(navmasks) == 0:
+                logger.info("No navigation mask selection specified, skipping all navigation masks")
+                navmask = None
+            else:
+                logger.info(f"Filtering masks based on selection: {navmasks}.")
+                navmask = np.zeros(
+                    signal.axes_manager.navigation_shape, dtype=bool
+                )  # Create mask
+                if len(navmasks) == 1 and navmasks[0] == 'all':
+                    logger.info(f"Using all navigation masks present in metadata")
+                    navmasks = list(masks.keys())
+                for mask_name, mask in masks:  # Iterate and add masks together
+                    if mask_name in navmasks:
+                        logger.info(f"Adding mask {mask} to navigation mask")
+                        navmask += mask
+                    else:
+                        logger.info(
+                            f"Did not add mask {mask} to navigation mask as the name '{mask_name}' was not found in navigation mask selection list {navmasks}")
 
         if arguments.apply_mask:
             logger.info(f"Applying diffraction masks to the signal")
