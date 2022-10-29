@@ -333,6 +333,8 @@ if __name__ == "__main__":
                     else:
                         logger.info(
                             f"Did not add mask {mask} to navigation mask as the name '{mask_name}' was not found in navigation mask selection list {navmasks}")
+                logger.debug(f"Transposing navigation mask")
+                navmask = navmask.transpose()
 
         if arguments.apply_mask:
             logger.info(f"Applying diffraction masks to the signal")
