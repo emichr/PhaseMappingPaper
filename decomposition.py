@@ -37,8 +37,8 @@ def decompose(
     if navmask is not None:
         logger.debug(f"Got navigation mask {navmask}")
         if isinstance(navmask, hs.signals.Signal2D):
-            logger.debug(f"Navigation mask is a hyperspy signal. Extracting data array")
-            navmask = navmask.data
+            logger.debug(f"Navigation mask is a hyperspy signal. Extracting data array and transposing the data")
+            navmask = navmask.data.transpose() #The data needs to be transposed due to different conventions in hyperspy and numpy.
         if not signal.axes_manager.navigation_shape == navmask.shape:
             logger.warning(
                 f"The navigation mask shape {navmask.shape} does not match signal navigation shape {signal.axes_manager.navigation_shape}"
