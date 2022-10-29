@@ -252,8 +252,6 @@ if __name__ == "__main__":
         suffix += "_poissonian"
     if arguments.mask is not None:
         suffix += "_mask"
-    if len(arguments.navmask) >0:
-        suffix += f"_navmasks-{len(arguments.navmasks)}"
     if arguments.logscale:
         suffix += "_log"
         if arguments.log_offset is not None:
@@ -331,6 +329,7 @@ if __name__ == "__main__":
                     if mask_name in navmasks:
                         logger.info(f"Adding mask {mask} to navigation mask")
                         navmask += mask
+                        suffix+=f"_navmask-{mask_name}"
                     else:
                         logger.info(
                             f"Did not add mask {mask} to navigation mask as the name '{mask_name}' was not found in navigation mask selection list {navmasks}")
