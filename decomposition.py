@@ -252,6 +252,8 @@ if __name__ == "__main__":
         suffix += "_poissonian"
     if arguments.mask is not None:
         suffix += "_mask"
+    if len(arguments.navmask) >0:
+        suffix += f"_navmasks-{len(arguments.navmasks)}"
     if arguments.logscale:
         suffix += "_log"
         if arguments.log_offset is not None:
