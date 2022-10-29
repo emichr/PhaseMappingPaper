@@ -329,7 +329,7 @@ if __name__ == "__main__":
                     if mask_name in navmasks:
                         logger.info(f"Adding mask {mask} to navigation mask")
                         navmask += mask
-                        suffix+=f"_navmask-{mask_name}"
+                        suffix += f"_navmask-{mask_name}"
                     else:
                         logger.info(
                             f"Did not add mask {mask} to navigation mask as the name '{mask_name}' was not found in navigation mask selection list {navmasks}")
