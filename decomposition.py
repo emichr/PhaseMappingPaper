@@ -307,6 +307,8 @@ if __name__ == "__main__":
         # Extract navigation mask signals
         logger.info(f"Getting navigation mask signals")
         navmasks = arguments.navmask
+        if navmasks is None:
+            navmasks = []
         try:
             masks = signal.metadata.Preprocessing.Masks.Navigation  # Extract the navigation masks from the metadata
         except AttributeError as e:
