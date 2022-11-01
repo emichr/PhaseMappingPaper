@@ -234,30 +234,26 @@ if __name__ == "__main__":
             logger.info(
                 f'Specified output path "{output_path.absolute()}" does not exists. I will attempt to create it'
             )
-            if not output_path.is_dir():
-                raise ValueError(
-                    f'Output path "{output_path.absolute()} is not a directory and cannot be created.'
-                )
-            else:
-                logger.info(f'Creating output directory "{output_path.absolute()}"')
-                output_path.mkdir(parents=True, exist_ok=True)
-                logger.info(f"Created output directory successfully.")
+            logger.info(f'Creating output directory "{output_path.absolute()}"')
+            output_path.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Created output directory successfully.")
         logger.info(f'I will put outputs at "{output_path.absolute()}"')
 
     # Suffix to add to output name
     suffix = ""
-    if arguments.scale is not None:
-        suffix += f"_scaled-{arguments.scale}"
-    if arguments.poissonian:
-        suffix += "_poissonian"
-    if arguments.mask is not None:
-        suffix += "_mask"
-    if arguments.logscale:
-        suffix += "_log"
-        if arguments.log_offset is not None:
-            suffix += f"_logoffset{arguments.log_offset}"
-    for arg in kwargs:
-        suffix += f"_{arg}-{kwargs[arg]}"
+    if False:
+        if arguments.scale is not None:
+            suffix += f"_scaled-{arguments.scale}"
+        if arguments.poissonian:
+            suffix += "_poissonian"
+        if arguments.mask is not None:
+            suffix += "_mask"
+        if arguments.logscale:
+            suffix += "_log"
+            if arguments.log_offset is not None:
+                suffix += f"_logoffset{arguments.log_offset}"
+        for arg in kwargs:
+            suffix += f"_{arg}-{kwargs[arg]}"
 
     logger.info(f'Loading data signal "{arguments.hs_file.absolute()}')
     signal = hs.load(arguments.hs_file.absolute(), lazy=arguments.lazy)
