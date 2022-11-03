@@ -45,7 +45,7 @@ def decompose(
             )
 
     if diffmask is not None:
-        logger.debug(f"Got diffraction mask {diffmask}")
+        logger.debug(f"Got diffraction mask with {np.count_nonzero(diffmask)} nonzero values")
         if isinstance(diffmask, hs.signals.Signal2D):
             logger.debug(
                 f"Diffraction mask is a hyperspy signal. Extracting data array"
@@ -53,7 +53,7 @@ def decompose(
             diffmask = diffmask.data
         if not signal.axes_manager.signal_shape == diffmask.shape:
             logger.warning(
-                f"The diffraction mask shape {navmask.shape} does not match signal diffraction shape {signal.axes_manager.signal_shape}"
+                f"The diffraction mask shape {diffmask.shape} does not match signal diffraction shape {signal.axes_manager.signal_shape}"
             )
 
     if (
@@ -68,7 +68,7 @@ def decompose(
         )
         signal.compute()
 
-    logger.info(f"Starting decomposition with keyword arguments {kwargs}")
+    logger.info(f"Starting {algorithm} decomposition into {output_dimension} components with keyword arguments {kwargs}")
     tic = time.time()
     decomp = signal.decomposition(
         normalize_poissonian_noise=normalize_poissonian_noise,
@@ -81,7 +81,7 @@ def decompose(
     )
     toc = time.time()
     logger.info(f"Finished decomposition. Elapsed time: {toc - tic} seconds")
-    logger.info(f"Decoposition parameters:\n{decomp}")
+    logger.info(f"Decoposition parameters: {decomp}")
 
     if algorithm == 'NMF':
         logger.info(f"Decomposition reconstruction error: {decomp.reconstruction_err_}")
@@ -361,7 +361,8 @@ if __name__ == "__main__":
     else:
         components = arguments.components
 
-    for component in components:
+    for i, component in enumerate(components):
+        logger.info(f"Running decomposition {i} of {len(components)}")
         decomp = decompose(
             signal,
             normalize_poissonian_noise=arguments.poissonian,
@@ -410,5 +411,5 @@ if __name__ == "__main__":
                 )
             except Exception as e:
                 logger.error("Could not save decomposition loadings: \n{e}")
-
+        logger.info(f"Finshed decomposition {i} of {len(components)}\n")
     logger.info(f"Finished decomposition script")
