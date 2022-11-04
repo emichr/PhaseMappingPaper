@@ -57,6 +57,7 @@ if __name__ == "__main__":
     except AttributeError as e:
         logger.error(f"Could not remove navigation masks due to error:\n{e}")
     else:
+        logger.info(f"Signal now has metadata:\n{signal.metadata}")
         logger.info(f"Saving signal")
         signal.save(arguments.hs_file.absolute(), overwrite=True)
         logger.info(f"Saved file successfully")
