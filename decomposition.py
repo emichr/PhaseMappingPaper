@@ -383,7 +383,8 @@ if __name__ == "__main__":
 
         if arguments.store_signal:
             logger.info(f'Saving dataset with decomposition results to "{output_name}"')
-            signal.metadata.add_dictionary({'Decomposition': decomp.__dict__})
+            if decomp is not None:
+                signal.metadata.add_dictionary({'Decomposition': decomp.__dict__})
             signal.save(output_name, overwrite=True)
         else:
             logger.info(
@@ -393,7 +394,8 @@ if __name__ == "__main__":
             try:
                 logger.info(f"Saving factors")
                 factors = signal.get_decomposition_factors()
-                factors.metadata.add_dictionary({'Decomposition': decomp.__dict__})
+                if decomp is not None:
+                    factors.metadata.add_dictionary({'Decomposition': decomp.__dict__})
                 factors.save(
                     output_name.with_name(f"{output_name.stem}_factors{output_name.suffix}"),
                     overwrite=True,
@@ -404,7 +406,8 @@ if __name__ == "__main__":
             try:
                 logger.info(f"Saving loadings")
                 loadings = signal.get_decomposition_loadings()
-                loadings.metadata.add_dictionary({'Decomposition': decomp.__dict__})
+                if decomp is not None:
+                    loadings.metadata.add_dictionary({'Decomposition': decomp.__dict__})
                 loadings.save(
                     output_name.with_name(f"{output_name.stem}_loadings{output_name.suffix}"),
                     overwrite=True,
