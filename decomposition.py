@@ -362,7 +362,7 @@ if __name__ == "__main__":
         components = arguments.components
 
     for i, component in enumerate(components):
-        logger.info(f"Running decomposition {i} of {len(components)}")
+        logger.info(f"Running decomposition {i+1} of {len(components)}")
         decomp = decompose(
             signal,
             normalize_poissonian_noise=arguments.poissonian,
@@ -414,5 +414,10 @@ if __name__ == "__main__":
                 )
             except Exception as e:
                 logger.error("Could not save decomposition loadings: \n{e}")
-        logger.info(f"Finshed decomposition {i} of {len(components)}\n")
+        logger.info(f"Finshed decomposition {i+1} of {len(components)}\n")
+
+        logger.info(f"Undoing treatments performed by the decomposition")
+        signal.undo_treatments()
+        logger.info(f"Undid treatments performed by the decomposition")
+
     logger.info(f"Finished decomposition script")
