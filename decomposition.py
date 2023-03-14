@@ -167,9 +167,9 @@ if __name__ == "__main__":
         help="The random state used when --initialization is random"
     )
     parser.add_argument(
-        "--copy",
-        action='store_true',
-        help="Whether to copy the data during decomposition or not. NB! This will change the data in the signal and should NOT be used together with --store_signal!"
+        "--nocopy",
+        action='store_false',
+        help="Whether to not backup the data before the decomposition"
     )
     parser.add_argument(
         "--output_path",
@@ -212,7 +212,7 @@ if __name__ == "__main__":
 
     kwargs = {
         'random_state': arguments.random_state,
-        'copy': arguments.copy,
+        'copy': arguments.nocopy,
     }
 
     if arguments.algorithm == "NMF":
